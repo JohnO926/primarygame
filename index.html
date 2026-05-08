@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Primary Singing Time</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:  #22c55e;
+      --white:  #ffffff;
+    }
+
+    html, body {
+      height: 100%;
+      background: linear-gradient(150deg, #0ea5e9 0%, #7c3aed 100%);
+      color: var(--white);
+      font-family: system-ui, 'Segoe UI', Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .screen {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(18px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+      overflow: hidden;
+    }
+
+    .screen.active {
+      opacity: 1;
+      pointer-events: all;
+      transform: translateY(0);
+    }
+
+    /* ── BOARD ───────────────────────────────────────────────────── */
+    #screen-board {
+      display: flex;
+      flex-direction: column;
+      padding: 16px 20px 20px;
+      gap: 12px;
+    }
+
+    .board-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .board-titles {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .board-title {
+      font-size: clamp(1.4rem, 3.5vw, 2.4rem);
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #fff;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.3), 0 0 40px rgba(255,255,255,0.2);
+    }
+
+    .board-subtitle {
+      font-size: clamp(0.75rem, 1.4vw, 1rem);
+      color: rgba(255,255,255,0.8);
+      letter-spacing: 0.06em;
+    }
+
+    .btn-reset {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 10px;
+      padding: 8px 18px;
+      font-size: clamp(0.75rem, 1.3vw, 1rem);
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: background 0.15s, transform 0.15s;
+      backdrop-filter: blur(4px);
+    }
+
+    .btn-reset:hover {
+      background: rgba(255,255,255,0.35);
+      transform: translateY(-50%) scale(1.05);
+    }
+
+    #board-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: 1fr 1fr;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    .card {
+      border: none;
+      border-radius: 16px;
+      color: #fff;
+      cursor: pointer;
+      font-size: clamp(2.8rem, 6vw, 5rem);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+      position: relative;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .card:hover:not(.used) {
+      transform: translateY(-8px) scale(1.04);
+      box-shadow: 0 16px 36px rgba(0,0,0,0.35);
+      filter: brightness(1.1);
+    }
+
+    .card:active:not(.used) {
+      transform: translateY(-2px) scale(0.97);
+    }
+
+    .card.used {
+      opacity: 0.3;
+      cursor: default;
+      filter: saturate(0.3);
+    }
+
+    .card.used::after {
+      content: '✓';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      color: var(--green);
+      background: rgba(0,0,0,0.4);
+      border-radius: 15px;
+      text-shadow: none;
+    }
+
+    /* ── CLUE SCREEN ─────────────────────────────────────────────── */
+    #screen-clue {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 48px;
+      gap: 28px;
+      text-align: center;
+    }
+
+    .clue-icon {
+      font-size: clamp(3.5rem, 9vw, 7rem);
+      line-height: 1;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+    }
+
+    .clue-card {
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.35);
+      border-radius: 20px;
+      padding: clamp(20px, 3vw, 36px) clamp(24px, 5vw, 56px);
+      max-width: min(860px, 90vw);
+      backdrop-filter: blur(8px);
+    }
+
+    .clue-label {
+      font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 14px;
+    }
+
+    .clue-hint {
+      font-size: clamp(1.5rem, 3vw, 2.6rem);
+      color: #fff;
+      line-height: 1.55;
+      font-style: italic;
+    }
+
+    .song-title-reveal {
+      font-size: clamp(1.8rem, 4vw, 3.5rem);
+      color: #fde68a;
+      font-weight: 800;
+      opacity: 0;
+      transition: opacity 0.6s ease, transform 0.6s ease;
+      transform: translateY(10px) scale(0.95);
+      min-height: 1.25em;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.3);
+    }
+
+    .song-title-reveal.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 14px 32px;
+      font-size: clamp(0.95rem, 1.8vw, 1.4rem);
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .btn:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-yellow {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      color: #1c1917;
+    }
+    .btn-yellow:hover { filter: brightness(1.1); }
+
+    .btn-glass {
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      border: 2px solid rgba(255,255,255,0.4);
+      backdrop-filter: blur(4px);
+    }
+    .btn-glass:hover { background: rgba(255,255,255,0.32); }
+
+    .hidden { visibility: hidden; }
+
+    /* ── BRO HAYDEN SPLASH ───────────────────────────────────────── */
+    #screen-hayden {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: linear-gradient(135deg, #f59e0b 0%, #ef4444 50%, #ec4899 100%);
+      overflow: hidden;
+    }
+
+    .hayden-stars {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .hayden-star {
+      position: absolute;
+      animation: starFloat 1.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes starFloat {
+      from { transform: translateY(0) rotate(0deg) scale(1); }
+      to   { transform: translateY(-24px) rotate(25deg) scale(1.15); }
+    }
+
+    .hayden-content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      animation: haydenPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+      padding: 0 40px;
+    }
+
+    @keyframes haydenPop {
+      0%   { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    .hayden-badge {
+      font-size: clamp(1rem, 2vw, 1.4rem);
+      text-transform: uppercase;
+      letter-spacing: 0.25em;
+      color: rgba(255,255,255,0.85);
+      margin-bottom: 12px;
+    }
+
+    .hayden-title {
+      font-size: clamp(3rem, 8vw, 7rem);
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 4px 24px rgba(0,0,0,0.25), 0 0 60px rgba(255,255,255,0.3);
+      line-height: 1.1;
+    }
+
+    .hayden-sub {
+      margin-top: 20px;
+      font-size: clamp(0.9rem, 1.6vw, 1.2rem);
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── LYRICS SCREEN ───────────────────────────────────────────── */
+    #screen-lyrics {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .lyrics-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.15);
+      backdrop-filter: blur(8px);
+      flex-shrink: 0;
+      gap: 16px;
+    }
+
+    .lyrics-song-title {
+      font-size: clamp(0.9rem, 2vw, 1.5rem);
+      color: #fde68a;
+      font-weight: 700;
+    }
+
+    .lyrics-zone {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 32px 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .lyric-line {
+      font-size: clamp(1rem, 1.8vw, 1.4rem);
+      color: rgba(255,255,255,0.95);
+      opacity: 0.18;
+      text-align: center;
+      line-height: 1.45;
+      max-width: 860px;
+      width: 100%;
+      padding: 2px 0;
+      transition: opacity 0.25s ease, font-size 0.25s ease, color 0.25s ease, font-weight 0.25s ease;
+    }
+
+    .lyric-line.near {
+      opacity: 0.45;
+      font-size: clamp(1.2rem, 2.2vw, 1.8rem);
+    }
+
+    .lyric-line.current {
+      font-size: clamp(2.6rem, 5.5vw, 5rem);
+      color: #fde68a;
+      opacity: 1;
+      font-weight: 800;
+      text-shadow: 0 2px 16px rgba(0,0,0,0.25);
+    }
+
+    .lyrics-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 16px;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .lyrics-empty p {
+      font-size: clamp(1.1rem, 2vw, 1.6rem);
+      color: rgba(255,255,255,0.8);
+      line-height: 1.6;
+    }
+
+    .lyrics-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 16px 24px;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.15);
+      backdrop-filter: blur(8px);
+      flex-shrink: 0;
+    }
+
+    .btn-circle {
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.4);
+      color: #fff;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      font-size: 1.4rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, transform 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .btn-circle:hover { background: rgba(255,255,255,0.35); transform: scale(1.1); }
+    .btn-circle:active { transform: scale(0.95); }
+
+    .line-counter {
+      color: rgba(255,255,255,0.7);
+      font-size: clamp(0.85rem, 1.5vw, 1.1rem);
+      min-width: 70px;
+      text-align: center;
+    }
+
+    .lyrics-zone::-webkit-scrollbar { width: 5px; }
+    .lyrics-zone::-webkit-scrollbar-track { background: transparent; }
+    .lyrics-zone::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- BOARD -->
+  <section id="screen-board" class="screen active">
+    <div class="board-header">
+      <div class="board-titles">
+        <div class="board-title">Primary Singing Time</div>
+        <div class="board-subtitle">Pick a card to get a clue!</div>
+      </div>
+      <button class="btn-reset" onclick="resetGame()">↺ Reset</button>
+    </div>
+    <div id="board-grid"></div>
+  </section>
+
+  <!-- BRO HAYDEN SPLASH -->
+  <section id="screen-hayden" class="screen" onclick="skipHayden()">
+    <div class="hayden-stars" id="hayden-stars"></div>
+    <div class="hayden-content">
+      <div class="hayden-badge">✨ You picked a ✨</div>
+      <div class="hayden-title">Bro Hayden<br>Favorite!</div>
+      <div class="hayden-sub">tap anywhere to continue</div>
+    </div>
+  </section>
+
+  <!-- CLUE / REVEAL -->
+  <section id="screen-clue" class="screen">
+    <div class="clue-icon">🎵</div>
+    <div class="clue-card">
+      <div class="clue-label">Your Clue</div>
+      <div class="clue-hint" id="clue-hint-text"></div>
+    </div>
+    <div class="song-title-reveal" id="song-title-reveal"></div>
+    <div class="btn-row">
+      <button class="btn btn-yellow" id="btn-reveal" onclick="revealTitle()">Reveal Song</button>
+      <button class="btn btn-yellow hidden" id="btn-sing" onclick="showLyrics()">Sing It! ♪</button>
+      <button class="btn btn-glass" onclick="backToBoard()">← Back to Board</button>
+    </div>
+  </section>
+
+  <!-- LYRICS -->
+  <section id="screen-lyrics" class="screen">
+    <div class="lyrics-header">
+      <div class="lyrics-song-title" id="lyrics-title"></div>
+      <button class="btn btn-glass" onclick="backToBoard()">← Back to Board</button>
+    </div>
+    <div class="lyrics-zone" id="lyrics-zone" onclick="advanceLine()"></div>
+    <div class="lyrics-controls">
+      <button class="btn-circle" onclick="event.stopPropagation(); retreatLine();" aria-label="Previous line">&#8592;</button>
+      <div class="line-counter" id="line-counter"></div>
+      <button class="btn-circle" onclick="event.stopPropagation(); advanceLine();" aria-label="Next line">&#8594;</button>
+    </div>
+  </section>
+
+</div>
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+//  SONGS DATA
+// ════════════════════════════════════════════════════════════════════════════
+
+const SONGS = [
+  {
+    id: "mhflm",
+    title: "My Heavenly Father Loves Me",
+    hint: "This song talks about birds singing, breezes blowing, and a beautiful world — and WHO made it all just for you.",
+    lyrics: [
+      "Whenever I hear the song of a bird",
+      "Or look at the blue, blue sky,",
+      "Whenever I feel the rain on my face",
+      "Or the wind as it rushes by,",
+      "Whenever I touch a velvet rose",
+      "Or walk by our lilac tree,",
+      "I'm glad that I live in this beautiful world",
+      "Heav'nly Father created for me.",
+      "He gave me my eyes that I might see",
+      "The color of butterfly wings.",
+      "He gave me my ears that I might hear",
+      "The magical sound of things.",
+      "He gave me my life, my mind, my heart:",
+      "I thank him rev'rently",
+      "For all his creations, of which I'm a part.",
+      "Yes, I know Heav'nly Father loves me.",
+    ]
+  },
+  {
+    id: "iwfgp",
+    title: "I Will Follow God's Plan",
+    hint: "A plan that existed before you were even born — and YOU have an important part to play in it.",
+    lyrics: [
+      "My life is a gift; my life has a plan.",
+      "My life has a purpose; in heav'n it began.",
+      "My choice was to come to this lovely home on earth",
+      "And seek for God's light to direct me from birth.",
+      "I will follow God's plan for me,",
+      "Holding fast to his word and his love.",
+      "I will work, and I will pray;",
+      "I will always walk in his way.",
+      "Then I will be happy on earth",
+      "And in my home above.",
+    ]
+  },
+  {
+    id: "ftp",
+    title: "Follow the Prophet",
+    hint: "This song lists people by NAME — starting way back at the beginning, going all the way to someone alive right now.",
+    lyrics: [
+      "Adam was a prophet, first one that we know.",
+      "In a place called Eden, he helped things to grow.",
+      "Adam served the Lord by following his ways.",
+      "We are his descendants in the latter days.",
+      "Follow the prophet, follow the prophet,",
+      "Follow the prophet; don't go astray.",
+      "Follow the prophet, follow the prophet,",
+      "Follow the prophet; he knows the way.",
+      "Enoch was a prophet; he taught what was good.",
+      "People in his city did just what they should.",
+      "When they were so righteous that there was no sin,",
+      "Heav'nly Father took them up to live with him.",
+      "Follow the prophet, follow the prophet,",
+      "Follow the prophet; don't go astray.",
+      "Follow the prophet, follow the prophet,",
+      "Follow the prophet; he knows the way.",
+    ]
+  },
+  {
+    id: "acp",
+    title: "A Child's Prayer",
+    hint: "A conversation that goes TWO ways — a child asks a question, and then Heaven actually answers back.",
+    lyrics: [
+      "Heavenly Father, are you really there?",
+      "And do you hear and answer ev'ry child's prayer?",
+      "Some say that heaven is far away,",
+      "But I feel it close around me as I pray.",
+      "Heavenly Father, I remember now",
+      "Something that Jesus told disciples long ago:",
+      "\"Suffer the children to come to me.\"",
+      "Father, in prayer I'm coming now to thee.",
+      "Pray, he is there;",
+      "Speak, he is list'ning.",
+      "You are his child;",
+      "His love now surrounds you.",
+      "He hears your prayer;",
+      "He loves the children.",
+      "Of such is the kingdom, the kingdom of heav'n.",
+    ]
+  },
+  {
+    id: "kbwm",
+    title: "Kindness Begins with Me",
+    hint: "This song says changing the whole world starts with just ONE person — and that person might be in this room right now.",
+    lyrics: [
+      "I want to be kind to ev'ryone,",
+      "For that is right, you see.",
+      "So I say to myself, \"Remember this:",
+      "Kindness begins with me.\"",
+    ]
+  },
+  {
+    id: "inteeh",
+    title: "I Need Thee Every Hour",
+    hint: "Every. Single. Hour. That's how often this song says we need someone by our side.",
+    lyrics: [
+      "I need thee ev'ry hour,",
+      "Most gracious Lord.",
+      "No tender voice like thine",
+      "Can peace afford.",
+      "I need thee, oh, I need thee;",
+      "Ev'ry hour I need thee!",
+      "Oh, bless me now, my Savior;",
+      "I come to thee!",
+      "I need thee ev'ry hour;",
+      "Stay thou nearby.",
+      "Temptations lose their pow'r",
+      "When thou art nigh.",
+      "I need thee, oh, I need thee;",
+      "Ev'ry hour I need thee!",
+      "Oh, bless me now, my Savior;",
+      "I come to thee!",
+    ]
+  },
+  {
+    id: "geth",
+    title: "Gethsemane",
+    hint: "A garden — but not one full of flowers and butterflies. The most important night in all of history happened here.",
+    lyrics: [
+      "Jesus climbed the hill to the garden still.",
+      "His steps were heavy and slow.",
+      "Love and a prayer took Him there",
+      "To the place only He could go.",
+      "Gethsemane. Jesus loves me,",
+      "So He went willingly to Gethsemane.",
+      "He felt all that was sad, wicked, or bad,",
+      "All the pain we would ever know.",
+      "While His friends were asleep, He fought to keep",
+      "His promise made long ago.",
+      "Gethsemane. Jesus loves me,",
+      "So He went willingly to Gethsemane.",
+      "The hardest thing that ever was done,",
+      "The greatest pain that ever was known,",
+      "The biggest battle that ever was won—",
+      "This was done by Jesus!",
+      "The fight was won by Jesus!",
+      "Gethsemane. Jesus loves me,",
+      "So He gave His gift to me in Gethsemane.",
+      "Gethsemane. Jesus loves me,",
+      "So He gives His gift to me from Gethsemane.",
+    ]
+  },
+  {
+    id: "ktc",
+    title: "Keep the Commandments",
+    hint: "This song gives the same instruction over and over — as if it really, really, REALLY means it.",
+    lyrics: [
+      "Keep the commandments; keep the commandments!",
+      "In this there is safety; in this there is peace.",
+      "He will send blessings;",
+      "He will send blessings.",
+      "Words of a prophet:",
+      "Keep the commandments.",
+      "In this there is safety and peace.",
+      "We are His children; we are His children,",
+      "and we must be tested to show we are true.",
+      "Hold to His promises;",
+      "Hold to His promises,",
+      "Heeding the prophets:",
+      "Keep the commandments.",
+      "In this there is safety and peace.",
+    ]
+  },
+  {
+    id: "aoh",
+    title: "We'll Bring the World His Truth",
+    hint: "This song is about an ARMY — but the soldiers are children, and their weapons are truth and light.",
+    hayden: true,
+    lyrics: [
+      "We have been born, as Nephi of old,",
+      "To goodly parents who love the Lord.",
+      "We have been taught, and we understand,",
+      "That we must do as the Lord commands.",
+      "We are as the army of Helaman.",
+      "We have been taught in our youth.",
+      "And we will be the Lord's missionaries",
+      "To bring the world his truth.",
+      "We have been saved for these latter days",
+      "To build the kingdom in righteous ways.",
+      "We hear the words our prophet declares:",
+      "\"Let each who's worthy go forth and share.\"",
+      "We are as the army of Helaman.",
+      "We have been taught in our youth.",
+      "And we will be the Lord's missionaries",
+      "To bring the world his truth.",
+    ]
+  },
+  {
+    id: "tmsoj",
+    title: "Tell Me the Stories of Jesus",
+    hint: "This song is a request — asking to hear the same beloved stories one more time, just like a favorite book.",
+    hayden: true,
+    lyrics: [
+      "Tell me the stories of Jesus I love to hear,",
+      "Things I would ask him to tell me if he were here.",
+      "Scenes by the wayside, tales of the sea,",
+      "Stories of Jesus, tell them to me.",
+      "Oh, let me hear how the children stood round his knee.",
+      "I shall imagine his blessings resting on me;",
+      "Words full of kindness, deeds full of grace,",
+      "All in the love-light of Jesus' face.",
+    ]
+  }
+];
+
+// Card colors — one per card, cycles if needed
+const CARD_COLORS = [
+  { bg: 'linear-gradient(145deg,#f97316,#ef4444)', glow: 'rgba(249,115,22,0.5)' },
+  { bg: 'linear-gradient(145deg,#ec4899,#a855f7)', glow: 'rgba(236,72,153,0.5)' },
+  { bg: 'linear-gradient(145deg,#3b82f6,#06b6d4)', glow: 'rgba(59,130,246,0.5)' },
+  { bg: 'linear-gradient(145deg,#22c55e,#10b981)', glow: 'rgba(34,197,94,0.5)'  },
+  { bg: 'linear-gradient(145deg,#f59e0b,#eab308)', glow: 'rgba(245,158,11,0.5)' },
+  { bg: 'linear-gradient(145deg,#8b5cf6,#6366f1)', glow: 'rgba(139,92,246,0.5)' },
+  { bg: 'linear-gradient(145deg,#14b8a6,#06b6d4)', glow: 'rgba(20,184,166,0.5)' },
+  { bg: 'linear-gradient(145deg,#f43f5e,#ec4899)', glow: 'rgba(244,63,94,0.5)'  },
+  { bg: 'linear-gradient(145deg,#84cc16,#22c55e)', glow: 'rgba(132,204,22,0.5)' },
+  { bg: 'linear-gradient(145deg,#0ea5e9,#6366f1)', glow: 'rgba(14,165,233,0.5)' },
+];
+
+// ════════════════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════════════════
+let currentScreen  = "board";
+let activeSong     = null;
+let currentLineIdx = 0;
+let titleRevealed  = false;
+const usedSongs    = new Set();
+let shuffledSongs  = [];
+let lastAdvance    = 0;
+let haydenTimer    = null;
+
+// ════════════════════════════════════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════════════════════════════════════
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  currentScreen = name;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BOARD
+// ════════════════════════════════════════════════════════════════════════════
+function renderBoard() {
+  const grid = document.getElementById('board-grid');
+  grid.innerHTML = '';
+  shuffledSongs.forEach((song, idx) => {
+    const used  = usedSongs.has(song.id);
+    const color = CARD_COLORS[idx % CARD_COLORS.length];
+    const btn   = document.createElement('button');
+    btn.className = 'card' + (used ? ' used' : '');
+    btn.innerHTML = '♪';
+    btn.style.background = color.bg;
+    if (!used) btn.style.boxShadow = `0 6px 20px ${color.glow}`;
+    btn.setAttribute('aria-label', used ? song.title + ' — used' : 'Mystery song');
+    btn.setAttribute('aria-pressed', used ? 'true' : 'false');
+    if (!used) btn.addEventListener('click', () => showClue(song));
+    grid.appendChild(btn);
+  });
+}
+
+function resetGame() {
+  usedSongs.clear();
+  shuffledSongs = shuffle(SONGS);
+  renderBoard();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BRO HAYDEN SPLASH
+// ════════════════════════════════════════════════════════════════════════════
+const STAR_EMOJI = ['⭐','🌟','✨','💫'];
+
+function showHaydenSplash() {
+  const container = document.getElementById('hayden-stars');
+  container.innerHTML = '';
+  for (let i = 0; i < 22; i++) {
+    const star = document.createElement('span');
+    star.className = 'hayden-star';
+    star.textContent = STAR_EMOJI[Math.floor(Math.random() * STAR_EMOJI.length)];
+    star.style.cssText = [
+      `left:${Math.random() * 100}%`,
+      `top:${Math.random() * 100}%`,
+      `font-size:${(Math.random() * 1.8 + 1).toFixed(1)}rem`,
+      `opacity:${(Math.random() * 0.5 + 0.4).toFixed(2)}`,
+      `animation-duration:${(Math.random() * 1.5 + 1).toFixed(1)}s`,
+      `animation-delay:${(Math.random() * 0.8).toFixed(2)}s`,
+    ].join(';');
+    container.appendChild(star);
+  }
+  showScreen('hayden');
+  haydenTimer = setTimeout(showClueScreen, 2500);
+}
+
+function skipHayden() {
+  clearTimeout(haydenTimer);
+  showClueScreen();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CLUE
+// ════════════════════════════════════════════════════════════════════════════
+function showClue(song) {
+  activeSong    = song;
+  titleRevealed = false;
+  if (song.hayden) {
+    showHaydenSplash();
+  } else {
+    showClueScreen();
+  }
+}
+
+function showClueScreen() {
+  document.getElementById('clue-hint-text').textContent = activeSong.hint;
+  const titleEl = document.getElementById('song-title-reveal');
+  titleEl.textContent = activeSong.title;
+  titleEl.classList.remove('visible');
+  document.getElementById('btn-reveal').classList.remove('hidden');
+  document.getElementById('btn-sing').classList.add('hidden');
+  showScreen('clue');
+}
+
+function revealTitle() {
+  titleRevealed = true;
+  document.getElementById('song-title-reveal').classList.add('visible');
+  document.getElementById('btn-reveal').classList.add('hidden');
+  document.getElementById('btn-sing').classList.remove('hidden');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  LYRICS
+// ════════════════════════════════════════════════════════════════════════════
+function showLyrics() {
+  usedSongs.add(activeSong.id);
+  currentLineIdx = 0;
+  document.getElementById('lyrics-title').textContent = activeSong.title;
+  showScreen('lyrics');
+  renderLyricsView();
+}
+
+function renderLyricsView() {
+  const zone   = document.getElementById('lyrics-zone');
+  const lyrics = activeSong.lyrics;
+
+  if (!lyrics || lyrics.length === 0) {
+    zone.innerHTML = `<div class="lyrics-empty"><p>No lyrics added yet for<br><strong>${activeSong.title}</strong></p></div>`;
+    document.getElementById('line-counter').textContent = '';
+    return;
+  }
+
+  zone.innerHTML = '';
+  lyrics.forEach((line, i) => {
+    const p  = document.createElement('p');
+    p.className   = 'lyric-line';
+    p.textContent = line;
+    const diff = i - currentLineIdx;
+    if (diff === 0)          p.classList.add('current');
+    else if (Math.abs(diff) === 1) p.classList.add('near');
+    zone.appendChild(p);
+  });
+
+  document.getElementById('line-counter').textContent =
+    (currentLineIdx + 1) + ' / ' + lyrics.length;
+
+  const cur = zone.querySelector('.lyric-line.current');
+  if (cur) cur.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function advanceLine() {
+  const now = Date.now();
+  if (now - lastAdvance < 180) return;
+  lastAdvance = now;
+  if (!activeSong?.lyrics?.length) return;
+  if (currentLineIdx < activeSong.lyrics.length - 1) {
+    currentLineIdx++;
+    renderLyricsView();
+  }
+}
+
+function retreatLine() {
+  if (currentLineIdx > 0) {
+    currentLineIdx--;
+    renderLyricsView();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════════════════════════
+function backToBoard() {
+  clearTimeout(haydenTimer);
+  renderBoard();
+  showScreen('board');
+}
+
+document.addEventListener('keydown', e => {
+  if (currentScreen === 'lyrics') {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); advanceLine(); }
+    else if (e.key === 'ArrowLeft')               { e.preventDefault(); retreatLine(); }
+    else if (e.key === 'Escape')                  { backToBoard(); }
+  } else if (currentScreen === 'clue') {
+    if (e.key === 'Escape') { backToBoard(); }
+    else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (!titleRevealed) revealTitle(); else showLyrics();
+    }
+  } else if (currentScreen === 'hayden') {
+    skipHayden();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════════════════
+shuffledSongs = shuffle(SONGS);
+renderBoard();
+</script>
+</body>
+</html>
